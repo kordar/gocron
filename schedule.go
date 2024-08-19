@@ -40,13 +40,8 @@ func (g *Gocron) Remove(id string) {
 	}
 }
 
-func (g *Gocron) Add(job Schedule) {
-	cfg := g.Initializer(job)
-	job.SetConfig(cfg)
-
-	id := job.GetId()
-
-	exec := func() {
+func (g *Gocron) DefaultJob(job Schedule) cron.Job {
+	return cron.FuncJob(func() {
 
 		defer func() {
 			if err := recover(); err != nil {
@@ -59,7 +54,25 @@ func (g *Gocron) Add(job Schedule) {
 		}
 
 		job.Execute()
-	}
+	})
+}
+
+func (g *Gocron) AddWithChain(job Schedule, f func(funcJob cron.Job) cron.Job) {
+	defaultJob := g.DefaultJob(job)
+	chain := f(defaultJob)
+	g.AddWithJob(job, chain)
+}
+
+func (g *Gocron) Add(job Schedule) {
+	defaultJob := g.DefaultJob(job)
+	g.AddWithJob(job, defaultJob)
+}
+
+func (g *Gocron) AddWithJob(job Schedule, funcJob cron.Job) {
+	cfg := g.Initializer(job)
+	job.SetConfig(cfg)
+
+	id := job.GetId()
 
 	if g.items[id] != nil {
 		logger.Warnf("[gocron] job %s exists", job.GetId())
@@ -68,7 +81,7 @@ func (g *Gocron) Add(job Schedule) {
 
 	entries := make([]*EntryItem, 0)
 	for i := 0; i < job.Duplicate(); i++ {
-		if entryId, err := g.cron.AddFunc(job.GetSpec(), exec); err == nil {
+		if entryId, err := g.cron.AddJob(job.GetSpec(), funcJob); err == nil {
 			entry := &EntryItem{job.GetId(), time.Now(), entryId}
 			entries = append(entries, entry)
 			logger.Infof("[gocron] add job-%d %s success, config: %v", i, id, job.Config())

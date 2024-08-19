@@ -3,6 +3,7 @@ package gocron_test
 import (
 	"github.com/kordar/gocron"
 	logger "github.com/kordar/gologger"
+	"github.com/robfig/cron/v3"
 	"testing"
 	"time"
 )
@@ -22,7 +23,7 @@ func (s *TestNameSchedule) Execute() {
 
 func TestName(t *testing.T) {
 
-	g := gocron.NewGocron(func(job gocron.Schedule) map[string]string {
+	G := gocron.NewGocron(func(job gocron.Schedule) map[string]string {
 		return map[string]string{
 			"spec": "@every 3s",
 		}
@@ -30,8 +31,10 @@ func TestName(t *testing.T) {
 		return true
 	})
 
-	g.Add(&TestNameSchedule{})
-	g.Start()
+	G.AddWithChain(&TestNameSchedule{}, func(funcJob cron.Job) cron.Job {
+		return cron.NewChain(cron.SkipIfStillRunning(cron.DefaultLogger)).Then(funcJob)
+	})
+	G.Start()
 	time.Sleep(200 * time.Second)
 
 }
