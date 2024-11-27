@@ -26,6 +26,22 @@ func (g *Gocron) Start() {
 	g.cron.Start()
 }
 
+func (g *Gocron) Stop() {
+	g.cron.Stop()
+}
+
+func (g *Gocron) Cron() *cron.Cron {
+	return g.cron
+}
+
+func (g *Gocron) Entry(id cron.EntryID) cron.Entry {
+	return g.cron.Entry(id)
+}
+
+func (g *Gocron) Entries() []cron.Entry {
+	return g.cron.Entries()
+}
+
 func (g *Gocron) GetItemById(id string) []*EntryItem {
 	return g.items[id]
 }
