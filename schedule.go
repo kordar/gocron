@@ -9,6 +9,7 @@ import (
 type Gocron struct {
 	cron        *cron.Cron
 	items       map[string][]*EntryItem
+	cached      map[string]*CachedJob
 	Initializer func(job Schedule) map[string]string
 	CanRun      func(job Schedule) bool
 }
@@ -17,6 +18,7 @@ func NewGocron(f1 func(job Schedule) map[string]string, f2 func(job Schedule) bo
 	return &Gocron{
 		cron:        cron.New(),
 		items:       make(map[string][]*EntryItem),
+		cached:      make(map[string]*CachedJob),
 		Initializer: f1,
 		CanRun:      f2,
 	}
@@ -44,6 +46,14 @@ func (g *Gocron) Entries() []cron.Entry {
 
 func (g *Gocron) GetItemById(id string) []*EntryItem {
 	return g.items[id]
+}
+
+func (g *Gocron) Reload(id string) {
+	if g.cached[id] != nil {
+		g.Remove(id)
+		cachedJob := g.cached[id]
+		g.AddWithJob(cachedJob.Job, cachedJob.CronJob)
+	}
 }
 
 func (g *Gocron) Remove(id string) {
@@ -95,10 +105,17 @@ func (g *Gocron) AddWithJob(job Schedule, funcJob cron.Job) {
 		return
 	}
 
+	g.cached[job.GetId()] = &CachedJob{job, funcJob}
 	entries := make([]*EntryItem, 0)
 	for i := 0; i < job.Duplicate(); i++ {
 		if entryId, err := g.cron.AddJob(job.GetSpec(), funcJob); err == nil {
-			entry := &EntryItem{job.GetId(), time.Now(), entryId}
+			entry := &EntryItem{job.GetId(), time.Now(), entryId, map[string]interface{}{
+				"spec":        job.GetSpec(),
+				"description": job.Description(),
+				"tag":         job.Tag(),
+				"node_id":     cfg["nodeId"],
+				"node_addr":   cfg["nodeAddr"],
+			}}
 			entries = append(entries, entry)
 			logger.Infof("[gocron] add job-%d %s success, config: %v", i, id, job.Config())
 		} else {
@@ -118,9 +135,10 @@ func (g *Gocron) Prints() []*EntryItem {
 }
 
 type EntryItem struct {
-	Id      string       `json:"id"`
-	RegTime time.Time    `json:"reg_time"`
-	EntryId cron.EntryID `json:"entry_id"`
+	Id      string                 `json:"id"`
+	RegTime time.Time              `json:"reg_time"`
+	EntryId cron.EntryID           `json:"entry_id"`
+	Params  map[string]interface{} `json:"params"`
 }
 
 type Schedule interface {
@@ -130,4 +148,6 @@ type Schedule interface {
 	Config() map[string]string
 	SetConfig(cfg map[string]string)
 	Duplicate() int
+	Tag() string
+	Description() string
 }
