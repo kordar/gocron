@@ -9,11 +9,19 @@ func (b *BaseSchedule) SetConfig(cfg map[string]string) {
 }
 
 func (b *BaseSchedule) GetSpec() string {
-	return b.cfg["spec"]
+	if b.cfg == nil || b.cfg["spec"] == "" {
+		return "@every 10m"
+	} else {
+		return b.cfg["spec"]
+	}
 }
 
 func (b *BaseSchedule) Config() map[string]string {
-	return b.cfg
+	if b.cfg == nil {
+		return map[string]string{}
+	} else {
+		return b.cfg
+	}
 }
 
 func (b *BaseSchedule) Execute() {
@@ -24,7 +32,7 @@ func (b *BaseSchedule) Duplicate() int {
 }
 
 func (b *BaseSchedule) Tag() string {
-	return "main"
+	return ""
 }
 
 func (b *BaseSchedule) Description() string {

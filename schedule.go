@@ -52,6 +52,9 @@ func (g *Gocron) Reload(id string) {
 	if g.cached[id] != nil {
 		g.Remove(id)
 		cachedJob := g.cached[id]
+		cachedJob.Job.SetConfig(map[string]string{
+			"spec": "@every 3s",
+		})
 		g.AddWithJob(cachedJob.Job, cachedJob.CronJob)
 	}
 }
@@ -113,6 +116,7 @@ func (g *Gocron) AddWithJob(job Schedule, funcJob cron.Job) {
 				"spec":        job.GetSpec(),
 				"description": job.Description(),
 				"tag":         job.Tag(),
+				"duplicate":   i, // 副本序号
 				"node_id":     cfg["nodeId"],
 				"node_addr":   cfg["nodeAddr"],
 			}}
@@ -134,20 +138,20 @@ func (g *Gocron) Prints() []*EntryItem {
 	return entries
 }
 
-type EntryItem struct {
-	Id      string                 `json:"id"`
-	RegTime time.Time              `json:"reg_time"`
-	EntryId cron.EntryID           `json:"entry_id"`
-	Params  map[string]interface{} `json:"params"`
-}
-
-type Schedule interface {
-	GetId() string
-	GetSpec() string
-	Execute()
-	Config() map[string]string
-	SetConfig(cfg map[string]string)
-	Duplicate() int
-	Tag() string
-	Description() string
+func (g *Gocron) State() []StateEntryItem {
+	state := make([]StateEntryItem, 0)
+	for id := range g.cached {
+		s := StateEntryItem{
+			Id:   id,
+			Data: make([]*EntryItem, 0),
+		}
+		if g.items[id] == nil {
+			s.State = "shutdown"
+		} else {
+			s.State = "running"
+			s.Data = g.items[id]
+		}
+		state = append(state, s)
+	}
+	return state
 }
