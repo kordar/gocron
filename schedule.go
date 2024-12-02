@@ -7,8 +7,8 @@ import (
 )
 
 type Gocron struct {
-	cron        *cron.Cron
-	items       map[string][]*EntryItem
+	cron *cron.Cron
+	//items       map[string][]*EntryItem
 	cached      map[string]*CachedJob
 	Initializer func(job Schedule) map[string]string
 	CanRun      func(job Schedule) bool
