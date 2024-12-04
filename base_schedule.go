@@ -1,5 +1,7 @@
 package gocron
 
+import "github.com/robfig/cron/v3"
+
 type BaseSchedule struct {
 	config map[string]string
 }
@@ -37,4 +39,8 @@ func (b *BaseSchedule) Tag() string {
 
 func (b *BaseSchedule) Description() string {
 	return ""
+}
+
+func (b *BaseSchedule) ToCronJob() cron.Job {
+	return nil
 }

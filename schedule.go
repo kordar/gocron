@@ -6,10 +6,15 @@ import (
 	"time"
 )
 
+type InitializeFunction func(job Schedule) map[string]string
+type RuntimeFunction func(job Schedule) bool
+
 type Gocron struct {
-	cron  *cron.Cron
-	items map[string]*JobState
-	cfg   map[string]string
+	cron               *cron.Cron
+	items              map[string]*JobState
+	cfg                map[string]string
+	initializeFunction InitializeFunction
+	runtimeFunction    RuntimeFunction
 }
 
 func NewGocron(cfg map[string]string) *Gocron {
@@ -21,6 +26,14 @@ func NewGocron(cfg map[string]string) *Gocron {
 		items: make(map[string]*JobState),
 		cfg:   cfg,
 	}
+}
+
+func (g *Gocron) SetInitFn(f InitializeFunction) {
+	g.initializeFunction = f
+}
+
+func (g *Gocron) SetRuntimeFn(f RuntimeFunction) {
+	g.runtimeFunction = f
 }
 
 func (g *Gocron) Start() {
@@ -62,10 +75,19 @@ func (g *Gocron) Add(job Schedule) {
 		return
 	}
 
+	if g.initializeFunction != nil {
+		cfg := g.initializeFunction(job)
+		job.SetConfig(cfg)
+	}
+
 	state := &JobState{Job: job, State: Ready, Id: job.GetId()}
 	entries := make([]JobStateItem, 0)
 	for i := 0; i < job.Duplicate(); i++ {
-		if entryId, err := g.cron.AddJob(job.GetSpec(), job.ToCronJob()); err == nil {
+		cronJob := job.ToCronJob()
+		if cronJob == nil {
+			cronJob = GenCronJobWithCanRun(job, g.runtimeFunction)
+		}
+		if entryId, err := g.cron.AddJob(job.GetSpec(), cronJob); err == nil {
 			entry := JobStateItem{time.Now(), entryId, map[string]interface{}{
 				"spec":        job.GetSpec(),
 				"description": job.Description(),

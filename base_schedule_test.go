@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"github.com/kordar/gocron"
 	logger "github.com/kordar/gologger"
-	"github.com/robfig/cron/v3"
 	"testing"
 	"time"
 )
@@ -30,12 +29,12 @@ func (s TestNameSchedule) Duplicate() int {
 //	return "@every 3s"
 //}
 
-func (s TestNameSchedule) ToCronJob() cron.Job {
-	funcJob := gocron.GenCronJobWithCanRun(&s, func() bool {
-		return true
-	})
-	return cron.NewChain(cron.SkipIfStillRunning(cron.DefaultLogger)).Then(funcJob)
-}
+//func (s TestNameSchedule) ToCronJob() cron.Job {
+//	funcJob := gocron.GenCronJobWithCanRun(&s, func(job gocron.Schedule) bool {
+//		return true
+//	})
+//	return cron.NewChain(cron.SkipIfStillRunning(cron.DefaultLogger)).Then(funcJob)
+//}
 
 func TestName(t *testing.T) {
 
@@ -50,6 +49,15 @@ func TestName(t *testing.T) {
 	//	return cron.NewChain(cron.SkipIfStillRunning(cron.DefaultLogger)).Then(funcJob)
 	//})
 	G.Start()
+	G.SetInitFn(func(job gocron.Schedule) map[string]string {
+		return map[string]string{
+			"spec": "@every 1s",
+		}
+	})
+	G.SetRuntimeFn(func(job gocron.Schedule) bool {
+		logger.Warn("Unable to execute current task", job.GetId())
+		return false
+	})
 
 	//time.Sleep(3 * time.Second)
 	//G.Remove(schedule.GetId())

@@ -5,7 +5,7 @@ import (
 	"github.com/robfig/cron/v3"
 )
 
-func GenCronJobWithCanRun(job Schedule, canRun func() bool) cron.Job {
+func GenCronJobWithCanRun(job Schedule, canRun RuntimeFunction) cron.Job {
 	return cron.FuncJob(func() {
 
 		defer func() {
@@ -14,7 +14,7 @@ func GenCronJobWithCanRun(job Schedule, canRun func() bool) cron.Job {
 			}
 		}()
 
-		if !canRun() {
+		if canRun != nil && !canRun(job) {
 			return
 		}
 
