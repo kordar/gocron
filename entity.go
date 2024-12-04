@@ -5,6 +5,19 @@ import (
 	"time"
 )
 
+type State int
+
+const (
+	Ready State = iota
+	Running
+	Shutdown
+	AddFailed
+)
+
+func (s State) String() string {
+	return [...]string{"Ready", "Running", "Shutdown", "AddFailed"}[s]
+}
+
 type Schedule interface {
 	GetId() string
 	GetSpec() string
@@ -14,22 +27,26 @@ type Schedule interface {
 	Duplicate() int
 	Tag() string
 	Description() string
+	ToCronJob() cron.Job
 }
 
-type CachedJob struct {
-	Job     Schedule
-	CronJob cron.Job
-}
-
-type EntryItem struct {
-	Id      string                 `json:"id"`
+type JobStateItem struct {
 	RegTime time.Time              `json:"reg_time"`
 	EntryId cron.EntryID           `json:"entry_id"`
 	Params  map[string]interface{} `json:"params"`
 }
 
-type StateEntryItem struct {
-	Id    string       `json:"id"`
-	State string       `json:"state"`
-	Data  []*EntryItem `json:"data"`
+type JobState struct {
+	Id    string
+	Job   Schedule
+	State State
+	Err   error
+	Items []JobStateItem
+}
+
+type JobStateVO struct {
+	JobId string         `json:"job_id"`
+	State string         `json:"state"`
+	Err   string         `json:"err"`
+	Data  []JobStateItem `json:"data"`
 }

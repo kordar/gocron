@@ -7,20 +7,19 @@ import (
 )
 
 type Gocron struct {
-	cron *cron.Cron
-	//items       map[string][]*EntryItem
-	cached      map[string]*CachedJob
-	Initializer func(job Schedule) map[string]string
-	CanRun      func(job Schedule) bool
+	cron  *cron.Cron
+	items map[string]*JobState
+	cfg   map[string]string
 }
 
-func NewGocron(f1 func(job Schedule) map[string]string, f2 func(job Schedule) bool) *Gocron {
+func NewGocron(cfg map[string]string) *Gocron {
+	if cfg == nil {
+		cfg = map[string]string{}
+	}
 	return &Gocron{
-		cron:        cron.New(),
-		items:       make(map[string][]*EntryItem),
-		cached:      make(map[string]*CachedJob),
-		Initializer: f1,
-		CanRun:      f2,
+		cron:  cron.New(),
+		items: make(map[string]*JobState),
+		cfg:   cfg,
 	}
 }
 
@@ -28,130 +27,89 @@ func (g *Gocron) Start() {
 	g.cron.Start()
 }
 
-func (g *Gocron) Stop() {
-	g.cron.Stop()
-}
-
 func (g *Gocron) Cron() *cron.Cron {
 	return g.cron
 }
 
-func (g *Gocron) Entry(id cron.EntryID) cron.Entry {
-	return g.cron.Entry(id)
-}
-
-func (g *Gocron) Entries() []cron.Entry {
-	return g.cron.Entries()
-}
-
-func (g *Gocron) GetItemById(id string) []*EntryItem {
-	return g.items[id]
-}
-
 func (g *Gocron) Reload(id string) {
-	if g.cached[id] != nil {
-		g.Remove(id)
-		cachedJob := g.cached[id]
-		cachedJob.Job.SetConfig(map[string]string{
-			"spec": "@every 3s",
-		})
-		g.AddWithJob(cachedJob.Job, cachedJob.CronJob)
+	state := g.items[id]
+	if state == nil {
+		return
 	}
+	logger.Infof("reload the schedule named %s", id)
+	g.Remove(id)
+	delete(g.items, id)
+	g.Add(state.Job)
+	logger.Infof("reload the schedule finished named %s", id)
 }
 
 func (g *Gocron) Remove(id string) {
-	if g.items[id] != nil {
-		entries := g.items[id]
-		for _, entry := range entries {
-			g.cron.Remove(entry.EntryId)
-		}
-		delete(g.items, id)
+	if g.items[id] == nil {
+		return
 	}
-}
-
-func (g *Gocron) DefaultJob(job Schedule) cron.Job {
-	return cron.FuncJob(func() {
-
-		defer func() {
-			if err := recover(); err != nil {
-				logger.Errorf("[gocron] recover %v", err)
-			}
-		}()
-
-		if !g.CanRun(job) {
-			return
-		}
-
-		job.Execute()
-	})
-}
-
-func (g *Gocron) AddWithChain(job Schedule, f func(funcJob cron.Job) cron.Job) {
-	defaultJob := g.DefaultJob(job)
-	chain := f(defaultJob)
-	g.AddWithJob(job, chain)
+	state := g.items[id]
+	for _, entry := range state.Items {
+		g.cron.Remove(entry.EntryId)
+	}
+	state.State = Shutdown
 }
 
 func (g *Gocron) Add(job Schedule) {
-	defaultJob := g.DefaultJob(job)
-	g.AddWithJob(job, defaultJob)
-}
-
-func (g *Gocron) AddWithJob(job Schedule, funcJob cron.Job) {
-	cfg := g.Initializer(job)
-	job.SetConfig(cfg)
 
 	id := job.GetId()
-
 	if g.items[id] != nil {
 		logger.Warnf("[gocron] job %s exists", job.GetId())
 		return
 	}
 
-	g.cached[job.GetId()] = &CachedJob{job, funcJob}
-	entries := make([]*EntryItem, 0)
+	state := &JobState{Job: job, State: Ready, Id: job.GetId()}
+	entries := make([]JobStateItem, 0)
 	for i := 0; i < job.Duplicate(); i++ {
-		if entryId, err := g.cron.AddJob(job.GetSpec(), funcJob); err == nil {
-			entry := &EntryItem{job.GetId(), time.Now(), entryId, map[string]interface{}{
+		if entryId, err := g.cron.AddJob(job.GetSpec(), job.ToCronJob()); err == nil {
+			entry := JobStateItem{time.Now(), entryId, map[string]interface{}{
 				"spec":        job.GetSpec(),
 				"description": job.Description(),
 				"tag":         job.Tag(),
 				"duplicate":   i, // 副本序号
-				"node_id":     cfg["nodeId"],
-				"node_addr":   cfg["nodeAddr"],
+				"node_id":     g.cfg["nodeId"],
+				"node_addr":   g.cfg["nodeAddr"],
 			}}
+			state.State = Running
 			entries = append(entries, entry)
 			logger.Infof("[gocron] add job-%d %s success, config: %v", i, id, job.Config())
 		} else {
+			state.State = AddFailed
+			state.Err = err
 			logger.Errorf("[gocron] add job-%d %s fail, err: %v", i, id, err)
+			break
 		}
-	}
 
-	g.items[id] = entries
+	}
+	state.Items = entries
+	g.items[id] = state
 }
 
-func (g *Gocron) Prints() []*EntryItem {
-	entries := make([]*EntryItem, 0)
-	for _, items := range g.items {
-		entries = append(entries, items...)
+func (g *Gocron) GetEntryItemsById(id string) []JobStateItem {
+	state := g.items[id]
+	return state.Items
+}
+
+func (g *Gocron) Prints() []JobStateItem {
+	entries := make([]JobStateItem, 0)
+	for _, state := range g.items {
+		entries = append(entries, state.Items...)
 	}
 	return entries
 }
 
-func (g *Gocron) State() []StateEntryItem {
-	state := make([]StateEntryItem, 0)
-	for id := range g.cached {
-		s := StateEntryItem{
-			Id:   id,
-			Data: make([]*EntryItem, 0),
+func (g *Gocron) State() []JobStateVO {
+	data := make([]JobStateVO, 0)
+	for id, state := range g.items {
+		vo := JobStateVO{JobId: id, Data: state.Items, State: state.State.String()}
+		if state.Err != nil {
+			vo.Err = state.Err.Error()
 		}
-		if g.items[id] == nil {
-			s.State = "shutdown"
-		} else {
-			s.State = "running"
-			s.Data = g.items[id]
-		}
-		state = append(state, s)
+		data = append(data, vo)
 	}
-	return state
+	return data
 }

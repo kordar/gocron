@@ -4,13 +4,7 @@
 
 ```go
 // 初始化cron处理器，需要设置配置函数，过滤执行函数
-g := gocron.NewGocron(func(job gocron.Schedule) map[string]string {
-    return map[string]string{
-        "spec": "@every 3s",
-    }
-}, func(job gocron.Schedule) bool {
-    return true
-})
+g := gocron.NewGocron(nil)
 
 // 添加schedule
 g.Add(&TestNameSchedule{})

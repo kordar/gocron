@@ -13,52 +13,60 @@ type TestNameSchedule struct {
 	gocron.BaseSchedule
 }
 
-func (s *TestNameSchedule) GetId() string {
+func (s TestNameSchedule) GetId() string {
 	return "test-name"
 }
 
-func (s *TestNameSchedule) Execute() {
+func (s TestNameSchedule) Execute() {
 	config := s.Config()
-	logger.Infof("----------------------------%v", config)
+	logger.Infof("--------------AAA--------------%v", config)
 }
 
-func (s *TestNameSchedule) Duplicate() int {
+func (s TestNameSchedule) Duplicate() int {
 	return 2
+}
+
+//func (s TestNameSchedule) GetSpec() string {
+//	return "@every 3s"
+//}
+
+func (s TestNameSchedule) ToCronJob() cron.Job {
+	funcJob := gocron.GenCronJobWithCanRun(&s, func() bool {
+		return true
+	})
+	return cron.NewChain(cron.SkipIfStillRunning(cron.DefaultLogger)).Then(funcJob)
 }
 
 func TestName(t *testing.T) {
 
-	G := gocron.NewGocron(func(job gocron.Schedule) map[string]string {
-		return map[string]string{
-			"spec": "@every 1s",
-		}
-	}, func(job gocron.Schedule) bool {
-		return true
-	})
+	G := gocron.NewGocron(nil)
 
 	schedule := TestNameSchedule{}
-	G.AddWithChain(&schedule, func(funcJob cron.Job) cron.Job {
-		return cron.NewChain(cron.SkipIfStillRunning(cron.DefaultLogger)).Then(funcJob)
+	schedule.SetConfig(map[string]string{
+		"spec": "@every 5s",
 	})
+	G.Add(&schedule)
+	//G.AddWithChain(&schedule, func(funcJob cron.Job) cron.Job {
+	//	return cron.NewChain(cron.SkipIfStillRunning(cron.DefaultLogger)).Then(funcJob)
+	//})
 	G.Start()
 
-	time.Sleep(3 * time.Second)
-	G.Remove(schedule.GetId())
+	//time.Sleep(3 * time.Second)
+	//G.Remove(schedule.GetId())
 
 	time.Sleep(3 * time.Second)
 	state := G.State()
 	marshal, _ := json.Marshal(&state)
 	logger.Infof("------------->%v", string(marshal))
-	G.Initializer = func(job gocron.Schedule) map[string]string {
-		return map[string]string{
-			"spec": "@every 3s",
-		}
-	}
+	//G.Initializer = func(job gocron.Schedule) map[string]string {
+	//	return map[string]string{
+	//		"spec": "@every 3s",
+	//	}
+	//}
 	G.Reload(schedule.GetId())
 	state = G.State()
 	marshal, _ = json.Marshal(&state)
 	logger.Infof("------------->%v", string(marshal))
 
 	time.Sleep(200 * time.Second)
-
 }
