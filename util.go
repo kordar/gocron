@@ -1,7 +1,8 @@
 package gocron
 
 import (
-	logger "github.com/kordar/gologger"
+	"log/slog"
+
 	"github.com/robfig/cron/v3"
 )
 
@@ -10,7 +11,7 @@ func GenCronJobWithCanRun(job Schedule, canRun RuntimeFunction) cron.Job {
 
 		defer func() {
 			if err := recover(); err != nil {
-				logger.Errorf("[gocron] recover %v", err)
+				slog.Error("[gocron] recover", "err", err)
 			}
 		}()
 

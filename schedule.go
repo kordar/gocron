@@ -1,9 +1,10 @@
 package gocron
 
 import (
-	"github.com/kordar/gologger"
-	"github.com/robfig/cron/v3"
+	"log/slog"
 	"time"
+
+	"github.com/robfig/cron/v3"
 )
 
 type InitializeFunction func(job Schedule) map[string]string
@@ -49,11 +50,11 @@ func (g *Gocron) Reload(id string) {
 	if state == nil {
 		return
 	}
-	logger.Infof("reload the schedule named %s", id)
+	slog.Info("reload schedule start", "id", id)
 	g.Remove(id)
 	delete(g.items, id)
 	g.Add(state.Job)
-	logger.Infof("reload the schedule finished named %s", id)
+	slog.Info("reload schedule done", "id", id)
 }
 
 func (g *Gocron) Remove(id string) {
@@ -71,7 +72,7 @@ func (g *Gocron) Add(job Schedule) {
 
 	id := job.GetId()
 	if g.items[id] != nil {
-		logger.Warnf("[gocron] job %s exists", job.GetId())
+		slog.Warn("[gocron] job exists", "id", job.GetId())
 		return
 	}
 
@@ -98,11 +99,11 @@ func (g *Gocron) Add(job Schedule) {
 			}}
 			state.State = Running
 			entries = append(entries, entry)
-			logger.Infof("[gocron] add job-%d %s success, config: %v", i, id, job.Config())
+			slog.Info("[gocron] add job success", "duplicate", i, "id", id, "config", job.Config())
 		} else {
 			state.State = AddFailed
 			state.Err = err
-			logger.Errorf("[gocron] add job-%d %s fail, err: %v", i, id, err)
+			slog.Error("[gocron] add job fail", "duplicate", i, "id", id, "err", err)
 			break
 		}
 

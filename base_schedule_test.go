@@ -2,10 +2,11 @@ package gocron_test
 
 import (
 	"encoding/json"
-	"github.com/kordar/gocron"
-	logger "github.com/kordar/gologger"
+	"log/slog"
 	"testing"
 	"time"
+
+	"github.com/kordar/gocron"
 )
 
 type TestNameSchedule struct {
@@ -18,7 +19,7 @@ func (s TestNameSchedule) GetId() string {
 
 func (s TestNameSchedule) Execute() {
 	config := s.Config()
-	logger.Infof("--------------AAA--------------%v", config)
+	slog.Info("--------------AAA--------------", "config", config)
 }
 
 func (s TestNameSchedule) Duplicate() int {
@@ -55,7 +56,7 @@ func TestName(t *testing.T) {
 		}
 	})
 	G.SetRuntimeFn(func(job gocron.Schedule) bool {
-		logger.Warn("Unable to execute current task", job.GetId())
+		slog.Warn("Unable to execute current task", "id", job.GetId())
 		return false
 	})
 
@@ -65,7 +66,7 @@ func TestName(t *testing.T) {
 	time.Sleep(3 * time.Second)
 	state := G.State()
 	marshal, _ := json.Marshal(&state)
-	logger.Infof("------------->%v", string(marshal))
+	slog.Info("------------->", "state", string(marshal))
 	//G.Initializer = func(job gocron.Schedule) map[string]string {
 	//	return map[string]string{
 	//		"spec": "@every 3s",
@@ -74,7 +75,7 @@ func TestName(t *testing.T) {
 	G.Reload(schedule.GetId())
 	state = G.State()
 	marshal, _ = json.Marshal(&state)
-	logger.Infof("------------->%v", string(marshal))
+	slog.Info("------------->", "state", string(marshal))
 
 	time.Sleep(200 * time.Second)
 }
